@@ -117,6 +117,11 @@ func GetToken(claims map[string]interface{}) ([]byte, error) {
 }
 
 func Verify(c *gin.Context) {
+	if len(c.GetHeader("Authorization")) <= 7 {
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+
 	pubKey, err := jwk.New(options.privateKey.PublicKey)
 	if err != nil {
 		c.AbortWithStatus(http.StatusInternalServerError)
