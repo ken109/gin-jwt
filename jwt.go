@@ -14,6 +14,8 @@ import (
 	"time"
 )
 
+type Claims map[string]interface{}
+
 type Option struct {
 	privateKey *rsa.PrivateKey
 	Issuer     string
@@ -85,7 +87,7 @@ func setOption(option Option) {
 	options = option
 }
 
-func GetToken(claims map[string]interface{}) ([]byte, error) {
+func GetToken(claims Claims) ([]byte, error) {
 	var err error
 
 	t := jwt.New()
@@ -143,9 +145,9 @@ func Verify(c *gin.Context) {
 	return
 }
 
-func GetClaims(c *gin.Context) map[string]interface{} {
+func GetClaims(c *gin.Context) Claims {
 	if claims, ok := c.Get("claims"); ok {
-		return claims.(map[string]interface{})
+		return claims.(Claims)
 	} else {
 		return nil
 	}
