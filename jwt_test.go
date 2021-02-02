@@ -63,4 +63,5 @@ func TestVerifyValidToken(t *testing.T) {
 	Verify(c)
 
 	assert.Equal(t, res.Code, http.StatusOK)
+	assert.Equal(t, GetClaims(c), map[string]interface{}{})
 }

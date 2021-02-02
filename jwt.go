@@ -142,3 +142,11 @@ func Verify(c *gin.Context) {
 	c.Next()
 	return
 }
+
+func GetClaims(c *gin.Context) map[string]interface{} {
+	if claims, ok := c.Get("claims"); ok {
+		return claims.(map[string]interface{})
+	} else {
+		return nil
+	}
+}
