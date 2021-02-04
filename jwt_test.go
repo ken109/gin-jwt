@@ -56,12 +56,12 @@ func TestVerifyValidToken(t *testing.T) {
 
 	c.Request, _ = http.NewRequest("GET", "/", nil)
 
-	token, err := GetToken(map[string]interface{}{})
+	token, err := GetToken(Claims{})
 
 	c.Request.Header.Add("Authorization", "bearer "+string(token))
 
 	Verify(c)
 
 	assert.Equal(t, res.Code, http.StatusOK)
-	assert.Equal(t, GetClaims(c), map[string]interface{}{})
+	assert.Equal(t, GetClaims(c), Claims{})
 }

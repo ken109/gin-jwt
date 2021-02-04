@@ -147,7 +147,7 @@ func Verify(c *gin.Context) {
 
 func GetClaims(c *gin.Context) Claims {
 	if claims, ok := c.Get("claims"); ok {
-		return claims.(Claims)
+		return claims.(map[string]interface{})
 	} else {
 		return nil
 	}
