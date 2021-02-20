@@ -35,6 +35,7 @@ func main() {
 	r.POST("/login", Login)
 
 	auth := r.Group("/api")
+	
 	// Set the middleware on the route you want to authenticate
 	auth.Use(jwt.Verify)
 	auth.GET("/hello", func(c *gin.Context) {
@@ -53,7 +54,7 @@ func main() {
 func Login(c *gin.Context) {
 	password := "test"
 
-	if password == "test" {
+	if password != "test" {
 		c.JSON(http.StatusForbidden, "login failed")
 		return
 	} else {
