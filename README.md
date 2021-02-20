@@ -9,96 +9,60 @@ https://github.com/ken109/gin-jwt-example
 openssl genrsa -out private.key 2048
 ```
 
-3. Add Import
+2. Example Main.go
 ```go
+package main
+
 import (
-    "github.com/ken109/gin-jwt"
+	"github.com/gin-gonic/gin"
+	"github.com/ken109/gin-jwt"
+	"io/ioutil"
+	"net/http"
 )
-```
 
-2. Set private key, Issuer, etc.
-```go
 func main() {
-    pemBytes, err := ioutil.ReadFile("private.key")
-    if err != nil {
-        panic(err)
-    }
+	pemBytes, err := ioutil.ReadFile("private.key")
+	if err != nil {
+		panic(err)
+	}
 
-    // here
-    err := jwt.SetUp(pemBytes, jwt.Option{
-        Issuer: "test@test.com",
-        Subject: "test@test.com",
-        KeyId: "test",
-        Expiration: time.Hour * 1,
-    })
-    
-    if err != nil {
-        panic(err)
-    }
+	// setup
+	if err = jwt.SetUp(pemBytes, jwt.Option{}); err != nil {
+		panic(err)
+	}
 
-    r := gin.New()
-  
-        :
-        :
+	r := gin.New()
+	r.POST("/login", Login)
+
+	auth := r.Group("/api")
+	// Set the middleware on the route you want to authenticate
+	auth.Use(jwt.Verify)
+	auth.GET("/hello", func(c *gin.Context) {
+		claims := jwt.GetClaims(c)
+
+		// claims["admin"].(bool)) -> true
+		
+		c.JSON(http.StatusOK, claims)
+	})
+
+	if err = r.Run(":8080"); err != nil {
+		panic(err)
+	}
 }
-```
 
-3. Issue a signed token
-```go
 func Login(c *gin.Context) {
-    user := "user"
-    password := "password"
-    
-    if user == "user" && password == "password" {
-        // here
-        token, err := jwt.GetToken(jwt.Claims{
-            "admin": true,
-        })
-        
-        if err != nil {
-            c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed"})
-            return
-        }
-        
-        c.JSON(http.StatusOK, map[string]interface{}{"token": string(token)})
-        return
-    }
-    
-    c.JSON(http.StatusForbidden, map[string]string{"error": "login failed"})
-    return
-}
-```
+	password := "test"
 
-4. Set the middleware on the route you want to authenticate 
-```go
-func main() {
-    :
-    
-    auth := r.Group("/api")
-
-    // here
-    auth.Use(jwt.Verify)
-    
-    :
-}
-```
-
-5. Receive private claims
-```go
-func main() {
-    :
-    
-    auth.Use(jwt.Verify)
-    
-    auth.GET("/hello", func(c *gin.Context) {
-        // here
-        claims := jwt.GetClaims(c)
-        
-        fmt.Println(claims["admin"].(bool)) // true
-        
-        c.JSON(http.StatusOK, claims)
-    })
-    
-    :
+	if password == "test" {
+		c.JSON(http.StatusForbidden, "login failed")
+		return
+	} else {
+		// Issue Token
+		token, _ := jwt.IssueToken(jwt.Claims{
+			"admin": true,
+		})
+		
+		c.JSON(http.StatusOK, string(token))
+	}
 }
 ```

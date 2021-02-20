@@ -56,7 +56,7 @@ func TestVerifyValidToken(t *testing.T) {
 
 	c.Request, _ = http.NewRequest("GET", "/", nil)
 
-	token, err := GetToken(Claims{})
+	token, err := IssueToken(Claims{})
 
 	c.Request.Header.Add("Authorization", "bearer "+string(token))
 

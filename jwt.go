@@ -87,7 +87,7 @@ func setOption(option Option) {
 	options = option
 }
 
-func GetToken(claims Claims) ([]byte, error) {
+func IssueToken(claims Claims) ([]byte, error) {
 	var err error
 
 	t := jwt.New()
