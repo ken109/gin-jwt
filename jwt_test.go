@@ -25,6 +25,8 @@ var hsRealm2 = "hs2"
 var refreshRealm = "refresh"
 
 func TestMain(m *testing.M) {
+	gin.SetMode(gin.ReleaseMode)
+
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		panic(err)
