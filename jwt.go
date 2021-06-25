@@ -25,7 +25,8 @@ type Option struct {
 	PrivKeyBytes []byte
 	privKey      *rsa.PrivateKey
 
-	Timeout time.Duration
+	Timeout        time.Duration
+	RefreshTimeout time.Duration
 
 	Issuer  string
 	Subject string
@@ -33,25 +34,25 @@ type Option struct {
 
 var options = make(map[string]Option)
 
-func IssueToken(realm string, claims Claims) ([]byte, error) {
+func issueToken(realm string, timeout time.Duration, claims Claims, refresh bool) (string, error) {
 	var err error
 
 	option, ok := options[realm]
 	if !ok {
-		return nil, errors.New("it is an unknown realm. please use the set up")
+		return "", errors.New("it is an unknown realm. please use the set up")
 	}
 
-	t := jwt.New()
+	token := jwt.New()
 
-	_ = t.Set(jwt.IssuedAtKey, time.Now().Unix())
-	_ = t.Set(jwt.IssuerKey, option.Issuer)
-	_ = t.Set(jwt.SubjectKey, option.Subject)
-	_ = t.Set(jwt.ExpirationKey, time.Now().Add(option.Timeout).Unix())
+	_ = token.Set(jwt.IssuedAtKey, time.Now().Unix())
+	_ = token.Set(jwt.IssuerKey, option.Issuer)
+	_ = token.Set(jwt.SubjectKey, option.Subject)
+	_ = token.Set(jwt.ExpirationKey, time.Now().Add(timeout).Unix())
 
 	for k, v := range claims {
-		err = t.Set(k, v)
+		err = token.Set(k, v)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 	}
 
@@ -61,25 +62,90 @@ func IssueToken(realm string, claims Claims) ([]byte, error) {
 	} else if option.SigningAlgorithm == HS256 {
 		realKey, err = jwk.New(option.SecretKey)
 	} else {
+		return "", errors.New("not set signing algorithm")
+	}
+	if err != nil {
+		return "", err
+	}
+
+	if !refresh {
+		_ = realKey.Set(jwk.KeyIDKey, option.Realm)
+	} else {
+		_ = realKey.Set(jwk.KeyIDKey, option.Realm+"-refresh")
+	}
+
+	signed, err := jwt.Sign(token, jwa.SignatureAlgorithm(option.SigningAlgorithm), realKey)
+	if err != nil {
+		return "", err
+	}
+	return string(signed), nil
+}
+
+func IssueToken(realm string, claims Claims) (token string, refreshToken string, err error) {
+	option, ok := options[realm]
+	if !ok {
+		return "", "", errors.New("it is an unknown realm. please use the set up")
+	}
+
+	token, err = issueToken(realm, option.Timeout, claims, false)
+	if err != nil {
+		return "", "", errors.New("failed to issue token")
+	}
+
+	refreshToken, err = issueToken(realm, option.RefreshTimeout, claims, true)
+	if err != nil {
+		return "", "", errors.New("failed to issue refresh token")
+	}
+	return
+}
+
+func RefreshToken(realm string, refreshToken string) (ok bool, newToken string, newRefreshToken string, err error) {
+	token, err := verify(realm, []byte(refreshToken), true)
+	if err != nil {
+		return false, "", "", err
+	}
+	if token == nil {
+		return false, "", "", nil
+	}
+	newToken, newRefreshToken, err = IssueToken(realm, token.PrivateClaims())
+	return true, newToken, newRefreshToken, err
+}
+
+func verify(realm string, tokenBytes []byte, refresh bool) (token jwt.Token, err error) {
+	option, ok := options[realm]
+	if !ok {
+		panic("it is an unknown realm. please use the set up")
+	}
+
+	var realKey jwk.Key
+	if option.SigningAlgorithm == RS256 {
+		realKey, err = jwk.New(option.privKey.PublicKey)
+	} else if option.SigningAlgorithm == HS256 {
+		realKey, err = jwk.New(option.SecretKey)
+	} else {
 		return nil, errors.New("not set signing algorithm")
 	}
 	if err != nil {
 		return nil, err
 	}
-	_ = realKey.Set(jwk.KeyIDKey, option.Realm)
 
-	signed, err := jwt.Sign(t, jwa.SignatureAlgorithm(option.SigningAlgorithm), realKey)
-	if err != nil {
-		return nil, err
+	if !refresh {
+		_ = realKey.Set(jwk.KeyIDKey, option.Realm)
+	} else {
+		_ = realKey.Set(jwk.KeyIDKey, option.Realm+"-refresh")
 	}
-	return signed, nil
+
+	keySet := jwk.NewSet()
+	keySet.Add(realKey)
+
+	token, err = jwt.Parse(tokenBytes, jwt.WithKeySet(keySet))
+	if err != nil || token.Expiration().UnixNano() < time.Now().UnixNano() {
+		return nil, nil
+	}
+	return
 }
 
 func Verify(realm string) func(c *gin.Context) {
-	option, ok := options[realm]
-	if !ok {
-		panic("it is an unknown realm. please use the set up")
-	}
 	return func(c *gin.Context) {
 		var err error
 
@@ -90,28 +156,13 @@ func Verify(realm string) func(c *gin.Context) {
 
 		tokenBytes := []byte(c.GetHeader("Authorization")[7:])
 
-		var token jwt.Token
-		var realKey jwk.Key
-		if option.SigningAlgorithm == RS256 {
-			realKey, err = jwk.New(option.privKey.PublicKey)
-		} else if option.SigningAlgorithm == HS256 {
-			realKey, err = jwk.New(option.SecretKey)
-		} else {
-			c.AbortWithStatus(http.StatusInternalServerError)
-			return
-		}
+		token, err := verify(realm, tokenBytes, false)
 		if err != nil {
 			c.AbortWithStatus(http.StatusInternalServerError)
 			return
 		}
 
-		_ = realKey.Set(jwk.KeyIDKey, option.Realm)
-
-		keySet := jwk.NewSet()
-		keySet.Add(realKey)
-
-		token, err = jwt.Parse(tokenBytes, jwt.WithKeySet(keySet))
-		if err != nil {
+		if token == nil {
 			c.AbortWithStatus(http.StatusUnauthorized)
 			return
 		}

@@ -19,6 +19,10 @@ func SetUp(option Option) error {
 		option.Timeout = time.Hour * 1
 	}
 
+	if option.RefreshTimeout == 0 {
+		option.RefreshTimeout = time.Hour * 24 * 90
+	}
+
 	if option.SigningAlgorithm == RS256 {
 		if err := setRsaPrivateKey(&option); err != nil {
 			return err

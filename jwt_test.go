@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/assert/v2"
@@ -20,6 +21,8 @@ var rsRealm2 = "rs2"
 
 var hsRealm = "hs"
 var hsRealm2 = "hs2"
+
+var refreshRealm = "refresh"
 
 func TestMain(m *testing.M) {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -54,6 +57,18 @@ func TestMain(m *testing.M) {
 		return
 	}
 
+	if err := SetUp(
+		Option{
+			Realm:            refreshRealm,
+			SigningAlgorithm: HS256,
+			SecretKey:        []byte("refresh"),
+			Timeout:          time.Second,
+		},
+	); err != nil {
+		panic(fmt.Errorf("failed to set up: %w", err))
+		return
+	}
+
 	os.Exit(m.Run())
 }
 
@@ -79,7 +94,6 @@ func TestVerifyHS256EmptyToken(t *testing.T) {
 func testVerifyInvalidToken(t *testing.T, realm string) {
 	res := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(res)
-
 	c.Request, _ = http.NewRequest("GET", "/", nil)
 	c.Request.Header.Add("Authorization", "invalid_token")
 
@@ -97,18 +111,16 @@ func TestVerifyHS256InvalidToken(t *testing.T) {
 }
 
 func testVerifyValidToken(t *testing.T, realm string) {
-	res := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(res)
-
-	c.Request, _ = http.NewRequest("GET", "/", nil)
-
-	token, err := IssueToken(realm, Claims{})
+	token, _, err := IssueToken(realm, Claims{})
 	if err != nil {
 		t.Errorf("failed to issue token: %s", err.Error())
 		return
 	}
 
-	c.Request.Header.Add("Authorization", "bearer "+string(token))
+	res := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(res)
+	c.Request, _ = http.NewRequest("GET", "/", nil)
+	c.Request.Header.Add("Authorization", "bearer "+token)
 
 	Verify(realm)(c)
 
@@ -125,18 +137,16 @@ func TestVerifyHS256ValidToken(t *testing.T) {
 }
 
 func testVerifyWrongRealm(t *testing.T, realm1 string, realm2 string) {
-	res := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(res)
-
-	c.Request, _ = http.NewRequest("GET", "/", nil)
-
-	token, err := IssueToken(realm1, Claims{})
+	token, _, err := IssueToken(realm1, Claims{})
 	if err != nil {
 		t.Errorf("failed to issue token: %s", err.Error())
 		return
 	}
 
-	c.Request.Header.Add("Authorization", "bearer "+string(token))
+	res := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(res)
+	c.Request, _ = http.NewRequest("GET", "/", nil)
+	c.Request.Header.Add("Authorization", "bearer "+token)
 
 	Verify(realm2)(c)
 
@@ -149,4 +159,39 @@ func TestVerifyRS256WrongRealm(t *testing.T) {
 
 func TestVerifyHS256WrongRealm(t *testing.T) {
 	testVerifyWrongRealm(t, hsRealm, hsRealm2)
+}
+
+func TestRefreshToken(t *testing.T) {
+	token, refreshToken, err := IssueToken(refreshRealm, Claims{"admin": true})
+	if err != nil {
+		t.Errorf("failed to issue token: %s", err.Error())
+		return
+	}
+
+	time.Sleep(time.Second)
+
+	res := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(res)
+	c.Request, _ = http.NewRequest("GET", "/", nil)
+	c.Request.Header.Add("Authorization", "bearer "+token)
+
+	Verify(refreshRealm)(c)
+
+	assert.Equal(t, res.Code, http.StatusUnauthorized)
+
+	_, token, _, err = RefreshToken(refreshRealm, refreshToken)
+	if err != nil {
+		t.Errorf("failed to issue token: %s", err.Error())
+		return
+	}
+
+	res = httptest.NewRecorder()
+	c, _ = gin.CreateTestContext(res)
+	c.Request, _ = http.NewRequest("GET", "/", nil)
+	c.Request.Header.Add("Authorization", "bearer "+token)
+
+	Verify(refreshRealm)(c)
+
+	assert.Equal(t, res.Code, http.StatusOK)
+	assert.Equal(t, GetClaims(c)["admin"].(bool), true)
 }

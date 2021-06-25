@@ -1,9 +1,3 @@
-# Example
-
-Click here for an implementation example.
-
-https://github.com/ken109/gin-jwt-example
-
 # Overview
 
 1. Issue private key
@@ -28,18 +22,17 @@ const MyRealm = "my-realm"
 
 func main() {
 	// setup
-	if err := jwt.SetUp(
+	_ = jwt.SetUp(
 		jwt.Option{
 			Realm:            MyRealm,
 			SigningAlgorithm: jwt.RS256,
 			PrivKeyFile:      "private.key",
 		},
-	); err != nil {
-		panic(err)
-	}
+	)
 
 	r := gin.New()
 	r.POST("/login", Login)
+	r.GET("/refresh", RefreshToken)
 
 	auth := r.Group("/api")
 
@@ -71,14 +64,39 @@ func Login(c *gin.Context) {
 		return
 	} else {
 		// Issue Token
-		token, _ := jwt.IssueToken(
+		token, refreshToken, _ := jwt.IssueToken(
 			MyRealm,
 			jwt.Claims{
 				"admin": true,
 			},
 		)
 
-		c.JSON(http.StatusOK, string(token))
+		c.JSON(
+			http.StatusOK, gin.H{
+				"token":         token,
+				"refresh_token": refreshToken,
+			},
+		)
 	}
+}
+
+func RefreshToken(c *gin.Context) {
+	ok, token, refreshToken, _ := jwt.RefreshToken(
+		MyRealm,
+		jwt.Claims{
+			"admin": true,
+		},
+	)
+	if !ok {
+		c.Status(http.StatusUnauthorized)
+		return
+	}
+
+	c.JSON(
+		http.StatusOK, gin.H{
+			"token":         token,
+			"refresh_token": refreshToken,
+		},
+	)
 }
 ```
