@@ -81,12 +81,7 @@ func Login(c *gin.Context) {
 }
 
 func RefreshToken(c *gin.Context) {
-	ok, token, refreshToken, _ := jwt.RefreshToken(
-		MyRealm,
-		jwt.Claims{
-			"admin": true,
-		},
-	)
+	ok, token, refreshToken, _ := jwt.RefreshToken(MyRealm, c.Query("refresh_token"))
 	if !ok {
 		c.Status(http.StatusUnauthorized)
 		return
