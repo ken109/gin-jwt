@@ -2,100 +2,51 @@ package jwt
 
 import (
 	"crypto/rsa"
-	"crypto/x509"
-	"encoding/pem"
 	"errors"
-	"fmt"
+	"net/http"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/lestrrat-go/jwx/jwa"
 	"github.com/lestrrat-go/jwx/jwk"
 	"github.com/lestrrat-go/jwx/jwt"
-	"net/http"
-	"time"
 )
 
 type Claims map[string]interface{}
 
 type Option struct {
-	privateKey *rsa.PrivateKey
-	Issuer     string
-	Subject    string
-	KeyId      string
-	Expiration time.Duration
+	Realm string
+
+	SigningAlgorithm SignatureAlgorithm
+
+	SecretKey []byte
+
+	PrivKeyFile  string
+	PrivKeyBytes []byte
+	privKey      *rsa.PrivateKey
+
+	Timeout time.Duration
+
+	Issuer  string
+	Subject string
 }
 
-var options Option
+var options = make(map[string]Option)
 
-func SetUp(pemBytes []byte, option Option) error {
-	setOption(option)
-	if err := setRsaPrivateKey(pemBytes); err != nil {
-		return err
-	}
-	return nil
-}
-
-func setRsaPrivateKey(pemBytes []byte) error {
+func IssueToken(realm string, claims Claims) ([]byte, error) {
 	var err error
-	block, _ := pem.Decode(pemBytes)
-	if block == nil {
-		return errors.New("invalid private key data")
-	}
 
-	var key *rsa.PrivateKey
-	if block.Type == "RSA PRIVATE KEY" {
-		key, err = x509.ParsePKCS1PrivateKey(block.Bytes)
-		if err != nil {
-			return err
-		}
-	} else if block.Type == "PRIVATE KEY" {
-		keyInterface, err := x509.ParsePKCS8PrivateKey(block.Bytes)
-		if err != nil {
-			return err
-		}
-		var ok bool
-		key, ok = keyInterface.(*rsa.PrivateKey)
-		if !ok {
-			return errors.New("not RSA private key")
-		}
-	} else {
-		return fmt.Errorf("invalid private key type : %s", block.Type)
+	option, ok := options[realm]
+	if !ok {
+		return nil, errors.New("it is an unknown realm. please use the set up")
 	}
-
-	key.Precompute()
-
-	if err := key.Validate(); err != nil {
-		return err
-	}
-
-	options.privateKey = key
-	return nil
-}
-
-func setOption(option Option) {
-	if option.Issuer == "" {
-		option.Issuer = "test@example.com"
-	}
-	if option.Subject == "" {
-		option.Subject = "test@example.com"
-	}
-	if option.KeyId == "" {
-		option.KeyId = "example"
-	}
-	if option.Expiration == 0 {
-		option.Expiration = time.Hour * 1
-	}
-	options = option
-}
-
-func IssueToken(claims Claims) ([]byte, error) {
-	var err error
 
 	t := jwt.New()
 
-	_ = t.Set(jwt.IssuerKey, options.Issuer)
-	_ = t.Set(jwt.SubjectKey, options.Subject)
-	_ = t.Set(jwt.ExpirationKey, time.Now().Add(options.Expiration).Unix())
 	_ = t.Set(jwt.IssuedAtKey, time.Now().Unix())
+	_ = t.Set(jwt.IssuerKey, option.Issuer)
+	_ = t.Set(jwt.SubjectKey, option.Subject)
+	_ = t.Set(jwt.ExpirationKey, time.Now().Add(option.Timeout).Unix())
 
 	for k, v := range claims {
 		err = t.Set(k, v)
@@ -104,45 +55,71 @@ func IssueToken(claims Claims) ([]byte, error) {
 		}
 	}
 
-	realKey, err := jwk.New(options.privateKey)
+	var realKey jwk.Key
+	if option.SigningAlgorithm == RS256 {
+		realKey, err = jwk.New(option.privKey)
+	} else if option.SigningAlgorithm == HS256 {
+		realKey, err = jwk.New(option.SecretKey)
+	} else {
+		return nil, errors.New("not set signing algorithm")
+	}
 	if err != nil {
 		return nil, err
 	}
-	_ = realKey.Set(jwk.KeyIDKey, options.KeyId)
+	_ = realKey.Set(jwk.KeyIDKey, option.Realm)
 
-	signed, err := jwt.Sign(t, jwa.RS256, realKey)
+	signed, err := jwt.Sign(t, jwa.SignatureAlgorithm(option.SigningAlgorithm), realKey)
 	if err != nil {
 		return nil, err
 	}
-
 	return signed, nil
 }
 
-func Verify(c *gin.Context) {
-	if len(c.GetHeader("Authorization")) <= 7 {
-		c.AbortWithStatus(http.StatusUnauthorized)
+func Verify(realm string) func(c *gin.Context) {
+	option, ok := options[realm]
+	if !ok {
+		panic("it is an unknown realm. please use the set up")
+	}
+	return func(c *gin.Context) {
+		var err error
+
+		if len(c.GetHeader("Authorization")) <= 7 {
+			c.AbortWithStatus(http.StatusUnauthorized)
+			return
+		}
+
+		tokenBytes := []byte(c.GetHeader("Authorization")[7:])
+
+		var token jwt.Token
+		var realKey jwk.Key
+		if option.SigningAlgorithm == RS256 {
+			realKey, err = jwk.New(option.privKey.PublicKey)
+		} else if option.SigningAlgorithm == HS256 {
+			realKey, err = jwk.New(option.SecretKey)
+		} else {
+			c.AbortWithStatus(http.StatusInternalServerError)
+			return
+		}
+		if err != nil {
+			c.AbortWithStatus(http.StatusInternalServerError)
+			return
+		}
+
+		_ = realKey.Set(jwk.KeyIDKey, option.Realm)
+
+		keySet := jwk.NewSet()
+		keySet.Add(realKey)
+
+		token, err = jwt.Parse(tokenBytes, jwt.WithKeySet(keySet))
+		if err != nil {
+			c.AbortWithStatus(http.StatusUnauthorized)
+			return
+		}
+
+		c.Set("claims", token.PrivateClaims())
+		c.Next()
 		return
 	}
-
-	pubKey, err := jwk.New(options.privateKey.PublicKey)
-	if err != nil {
-		c.AbortWithStatus(http.StatusInternalServerError)
-		return
-	}
-
-	_ = pubKey.Set(jwk.KeyIDKey, options.KeyId)
-
-	keySet := jwk.NewSet()
-	keySet.Add(pubKey)
-
-	token, err := jwt.Parse([]byte(c.GetHeader("Authorization")[7:]), jwt.WithKeySet(keySet))
-	if err != nil {
-		c.AbortWithStatus(http.StatusUnauthorized)
-		return
-	}
-	c.Set("claims", token.PrivateClaims())
-	c.Next()
-	return
 }
 
 func GetClaims(c *gin.Context) Claims {

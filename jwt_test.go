@@ -1,67 +1,152 @@
 package jwt
 
 import (
-	"github.com/gin-gonic/gin"
-	"github.com/go-playground/assert/v2"
-	"io/ioutil"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
+
+	"github.com/gin-gonic/gin"
+	"github.com/go-playground/assert/v2"
 )
 
-func TestVerifyEmptyToken(t *testing.T) {
-	res := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(res)
+var rsRealm = "rs"
+var rsRealm2 = "rs2"
 
-	c.Request, _ = http.NewRequest("GET", "/", nil)
+var hsRealm = "hs"
+var hsRealm2 = "hs2"
 
-	Verify(c)
-
-	assert.Equal(t, res.Code, http.StatusUnauthorized)
-}
-
-func TestVerifyInvalidToken(t *testing.T) {
-	pemBytes, err := ioutil.ReadFile("private.key")
+func TestMain(m *testing.M) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		panic(err)
 	}
 
-	if err := SetUp(pemBytes, Option{}); err != nil {
-		panic(err)
+	privateKey := &pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(key),
 	}
 
+	privateKeyBytes := pem.EncodeToMemory(privateKey)
+
+	if err := SetUp(Option{Realm: rsRealm, SigningAlgorithm: RS256, PrivKeyBytes: privateKeyBytes}); err != nil {
+		panic(fmt.Errorf("failed to set up: %w", err))
+		return
+	}
+
+	if err := SetUp(Option{Realm: rsRealm2, SigningAlgorithm: RS256, PrivKeyBytes: privateKeyBytes}); err != nil {
+		panic(fmt.Errorf("failed to set up: %w", err))
+		return
+	}
+
+	if err := SetUp(Option{Realm: hsRealm, SigningAlgorithm: HS256, SecretKey: []byte("secret")}); err != nil {
+		panic(fmt.Errorf("failed to set up: %w", err))
+		return
+	}
+
+	if err := SetUp(Option{Realm: hsRealm2, SigningAlgorithm: HS256, SecretKey: []byte("secret")}); err != nil {
+		panic(fmt.Errorf("failed to set up: %w", err))
+		return
+	}
+
+	os.Exit(m.Run())
+}
+
+func testVerifyToken(t *testing.T, realm string) {
 	res := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(res)
 
 	c.Request, _ = http.NewRequest("GET", "/", nil)
-	c.Request.Header.Add("Authorization", "test")
 
-	Verify(c)
+	Verify(realm)(c)
 
 	assert.Equal(t, res.Code, http.StatusUnauthorized)
 }
 
-func TestVerifyValidToken(t *testing.T) {
-	pemBytes, err := ioutil.ReadFile("private.key")
-	if err != nil {
-		panic(err)
-	}
+func TestVerifyRS256EmptyToken(t *testing.T) {
+	testVerifyToken(t, rsRealm)
+}
 
-	if err := SetUp(pemBytes, Option{}); err != nil {
-		panic(err)
-	}
+func TestVerifyHS256EmptyToken(t *testing.T) {
+	testVerifyToken(t, hsRealm)
+}
 
+func testVerifyInvalidToken(t *testing.T, realm string) {
+	res := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(res)
+
+	c.Request, _ = http.NewRequest("GET", "/", nil)
+	c.Request.Header.Add("Authorization", "invalid_token")
+
+	Verify(realm)(c)
+
+	assert.Equal(t, res.Code, http.StatusUnauthorized)
+}
+
+func TestVerifyRS256InvalidToken(t *testing.T) {
+	testVerifyInvalidToken(t, rsRealm)
+}
+
+func TestVerifyHS256InvalidToken(t *testing.T) {
+	testVerifyInvalidToken(t, hsRealm)
+}
+
+func testVerifyValidToken(t *testing.T, realm string) {
 	res := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(res)
 
 	c.Request, _ = http.NewRequest("GET", "/", nil)
 
-	token, err := IssueToken(Claims{})
+	token, err := IssueToken(realm, Claims{})
+	if err != nil {
+		t.Errorf("failed to issue token: %s", err.Error())
+		return
+	}
 
 	c.Request.Header.Add("Authorization", "bearer "+string(token))
 
-	Verify(c)
+	Verify(realm)(c)
 
 	assert.Equal(t, res.Code, http.StatusOK)
 	assert.Equal(t, GetClaims(c), Claims{})
+}
+
+func TestVerifyRS256ValidToken(t *testing.T) {
+	testVerifyValidToken(t, rsRealm)
+}
+
+func TestVerifyHS256ValidToken(t *testing.T) {
+	testVerifyValidToken(t, hsRealm)
+}
+
+func testVerifyWrongRealm(t *testing.T, realm1 string, realm2 string) {
+	res := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(res)
+
+	c.Request, _ = http.NewRequest("GET", "/", nil)
+
+	token, err := IssueToken(realm1, Claims{})
+	if err != nil {
+		t.Errorf("failed to issue token: %s", err.Error())
+		return
+	}
+
+	c.Request.Header.Add("Authorization", "bearer "+string(token))
+
+	Verify(realm2)(c)
+
+	assert.Equal(t, res.Code, http.StatusUnauthorized)
+}
+
+func TestVerifyRS256WrongRealm(t *testing.T) {
+	testVerifyWrongRealm(t, rsRealm, rsRealm2)
+}
+
+func TestVerifyHS256WrongRealm(t *testing.T) {
+	testVerifyWrongRealm(t, hsRealm, hsRealm2)
 }

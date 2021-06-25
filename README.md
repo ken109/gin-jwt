@@ -1,33 +1,40 @@
 # Example
+
 Click here for an implementation example.
 
 https://github.com/ken109/gin-jwt-example
 
 # Overview
-1. Issuance of private key
+
+1. Issue private key
+
 ```bash
 openssl genrsa -out private.key 2048
 ```
 
-2. Example Main.go
+2. Example main.go
+
 ```go
 package main
 
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/ken109/gin-jwt"
-	"io/ioutil"
+	"fmt"
 	"net/http"
 )
 
-func main() {
-	pemBytes, err := ioutil.ReadFile("private.key")
-	if err != nil {
-		panic(err)
-	}
+const MyRealm = "my-realm"
 
+func main() {
 	// setup
-	if err = jwt.SetUp(pemBytes, jwt.Option{}); err != nil {
+	if err := jwt.SetUp(
+		jwt.Option{
+			Realm:            MyRealm,
+			SigningAlgorithm: jwt.RS256,
+			PrivKeyFile:      "private.key",
+		},
+	); err != nil {
 		panic(err)
 	}
 
@@ -35,18 +42,21 @@ func main() {
 	r.POST("/login", Login)
 
 	auth := r.Group("/api")
-	
+
 	// Set the middleware on the route you want to authenticate
-	auth.Use(jwt.Verify)
-	auth.GET("/hello", func(c *gin.Context) {
-		claims := jwt.GetClaims(c)
+	auth.Use(jwt.Verify(MyRealm))
 
-		// claims["admin"].(bool)) -> true
-		
-		c.JSON(http.StatusOK, claims)
-	})
+	auth.GET(
+		"/hello", func(c *gin.Context) {
+			claims := jwt.GetClaims(c)
 
-	if err = r.Run(":8080"); err != nil {
+			fmt.Println(claims["admin"].(bool)) // true
+
+			c.JSON(http.StatusOK, claims)
+		},
+	)
+
+	if err := r.Run(":8080"); err != nil {
 		panic(err)
 	}
 }
@@ -55,14 +65,19 @@ func Login(c *gin.Context) {
 	password := "test"
 
 	if password != "test" {
+
 		c.JSON(http.StatusForbidden, "login failed")
+
 		return
 	} else {
 		// Issue Token
-		token, _ := jwt.IssueToken(jwt.Claims{
-			"admin": true,
-		})
-		
+		token, _ := jwt.IssueToken(
+			MyRealm,
+			jwt.Claims{
+				"admin": true,
+			},
+		)
+
 		c.JSON(http.StatusOK, string(token))
 	}
 }
