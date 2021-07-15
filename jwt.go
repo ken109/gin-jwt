@@ -12,6 +12,12 @@ import (
 	"github.com/lestrrat-go/jwx/jwt"
 )
 
+const (
+	authorizationHeader = "Authorization"
+
+	refreshTokenKeyIDSuffix = "-refresh"
+)
+
 type Claims map[string]interface{}
 
 type Option struct {
@@ -71,7 +77,7 @@ func issueToken(realm string, timeout time.Duration, claims Claims, refresh bool
 	if !refresh {
 		_ = realKey.Set(jwk.KeyIDKey, option.Realm)
 	} else {
-		_ = realKey.Set(jwk.KeyIDKey, option.Realm+"-refresh")
+		_ = realKey.Set(jwk.KeyIDKey, option.Realm+refreshTokenKeyIDSuffix)
 	}
 
 	signed, err := jwt.Sign(token, jwa.SignatureAlgorithm(option.SigningAlgorithm), realKey)
@@ -132,7 +138,7 @@ func verify(realm string, tokenBytes []byte, refresh bool) (token jwt.Token, err
 	if !refresh {
 		_ = realKey.Set(jwk.KeyIDKey, option.Realm)
 	} else {
-		_ = realKey.Set(jwk.KeyIDKey, option.Realm+"-refresh")
+		_ = realKey.Set(jwk.KeyIDKey, option.Realm+refreshTokenKeyIDSuffix)
 	}
 
 	keySet := jwk.NewSet()
@@ -149,12 +155,12 @@ func Verify(realm string) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		var err error
 
-		if len(c.GetHeader("Authorization")) <= 7 {
+		if len(c.GetHeader(authorizationHeader)) <= 7 {
 			c.AbortWithStatus(http.StatusUnauthorized)
 			return
 		}
 
-		tokenBytes := []byte(c.GetHeader("Authorization")[7:])
+		tokenBytes := []byte(c.GetHeader(authorizationHeader)[7:])
 
 		token, err := verify(realm, tokenBytes, false)
 		if err != nil {
