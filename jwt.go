@@ -120,7 +120,7 @@ func RefreshToken(realm string, refreshToken string) (ok bool, newToken string, 
 func verify(realm string, tokenBytes []byte, refresh bool) (token jwt.Token, err error) {
 	option, ok := options[realm]
 	if !ok {
-		panic("it is an unknown realm. please use the set up")
+		return nil, errors.New("it is an unknown realm, please use the set up")
 	}
 
 	var realKey jwk.Key
