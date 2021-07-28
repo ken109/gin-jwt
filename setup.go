@@ -34,6 +34,7 @@ func SetUp(option Option) error {
 	} else {
 		return errors.New("not set signing algorithm")
 	}
+
 	if _, ok := options[option.Realm]; ok {
 		return fmt.Errorf("realm is already exists: %s", option.Realm)
 	}

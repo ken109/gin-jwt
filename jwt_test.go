@@ -170,7 +170,7 @@ func TestRefreshToken(t *testing.T) {
 		return
 	}
 
-	time.Sleep(time.Second)
+	time.Sleep(time.Second * 2)
 
 	res := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(res)

@@ -50,10 +50,12 @@ func issueToken(realm string, timeout time.Duration, claims Claims, refresh bool
 
 	token := jwt.New()
 
-	_ = token.Set(jwt.IssuedAtKey, time.Now().Unix())
+	now := time.Now()
+
+	_ = token.Set(jwt.IssuedAtKey, now.Unix())
 	_ = token.Set(jwt.IssuerKey, option.Issuer)
 	_ = token.Set(jwt.SubjectKey, option.Subject)
-	_ = token.Set(jwt.ExpirationKey, time.Now().Add(timeout).Unix())
+	_ = token.Set(jwt.ExpirationKey, now.Add(timeout).Unix())
 
 	for k, v := range claims {
 		err = token.Set(k, v)
@@ -141,11 +143,13 @@ func verify(realm string, tokenBytes []byte, refresh bool) (token jwt.Token, err
 		_ = realKey.Set(jwk.KeyIDKey, option.Realm+refreshTokenKeyIDSuffix)
 	}
 
+	_ = realKey.Set(jwk.AlgorithmKey, jwa.SignatureAlgorithm(option.SigningAlgorithm))
+
 	keySet := jwk.NewSet()
 	keySet.Add(realKey)
 
 	token, err = jwt.Parse(tokenBytes, jwt.WithKeySet(keySet))
-	if err != nil || token.Expiration().UnixNano() < time.Now().UnixNano() {
+	if err != nil || token.Expiration().Unix() < time.Now().Unix() {
 		return nil, nil
 	}
 	return
