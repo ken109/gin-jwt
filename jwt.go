@@ -190,3 +190,11 @@ func GetClaims(c *gin.Context) Claims {
 		return nil
 	}
 }
+
+func GetClaim(c *gin.Context, key string) (value interface{}, ok bool) {
+	if claims := GetClaims(c); claims != nil {
+		value, ok = claims[key]
+		return
+	}
+	return nil, false
+}

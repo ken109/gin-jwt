@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -196,4 +197,49 @@ func TestRefreshToken(t *testing.T) {
 
 	assert.Equal(t, res.Code, http.StatusOK)
 	assert.Equal(t, GetClaims(c)["admin"].(bool), true)
+}
+
+func TestGetClaim(t *testing.T) {
+	type args struct {
+		key   string
+		value interface{}
+	}
+	tests := []struct {
+		name      string
+		args      args
+		wantValue interface{}
+		wantOk    bool
+	}{
+		{
+			name:      "boolean",
+			args:      args{key: "admin", value: true},
+			wantValue: true,
+			wantOk:    true,
+		},
+		{
+			name:      "uint",
+			args:      args{key: "id", value: 1},
+			wantValue: 1,
+			wantOk:    true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(res)
+			c.Request, _ = http.NewRequest("GET", "/", nil)
+
+			c.Set("claims", map[string]interface{}{
+				tt.args.key: tt.args.value,
+			})
+
+			gotValue, gotOk := GetClaim(c, tt.args.key)
+			if !reflect.DeepEqual(gotValue, tt.wantValue) {
+				t.Errorf("GetClaim() gotValue = %v, want %v", gotValue, tt.wantValue)
+			}
+			if gotOk != tt.wantOk {
+				t.Errorf("GetClaim() gotOk = %v, want %v", gotOk, tt.wantOk)
+			}
+		})
+	}
 }
