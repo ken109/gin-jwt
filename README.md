@@ -37,7 +37,7 @@ func main() {
 	auth := r.Group("/api")
 
 	// Set the middleware on the route you want to authenticate
-	auth.Use(jwt.Verify(MyRealm))
+	auth.Use(jwt.MustVerify(MyRealm))
 
 	auth.GET(
 		"/hello", func(c *gin.Context) {
