@@ -155,7 +155,35 @@ func verify(realm string, tokenBytes []byte, refresh bool) (token jwt.Token, err
 	return
 }
 
-func Verify(realm string) func(c *gin.Context) {
+func TryVerify(realm string) func(c *gin.Context) {
+	return func(c *gin.Context) {
+		var err error
+
+		if len(c.GetHeader(authorizationHeader)) <= 7 {
+			c.Next()
+			return
+		}
+
+		tokenBytes := []byte(c.GetHeader(authorizationHeader)[7:])
+
+		token, err := verify(realm, tokenBytes, false)
+		if err != nil {
+			c.Next()
+			return
+		}
+
+		if token == nil {
+			c.Next()
+			return
+		}
+
+		c.Set("claims", token.PrivateClaims())
+		c.Next()
+		return
+	}
+}
+
+func MustVerify(realm string) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		var err error
 

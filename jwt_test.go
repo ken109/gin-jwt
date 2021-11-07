@@ -81,7 +81,7 @@ func testVerifyToken(t *testing.T, realm string) {
 
 	c.Request, _ = http.NewRequest("GET", "/", nil)
 
-	Verify(realm)(c)
+	MustVerify(realm)(c)
 
 	assert.Equal(t, res.Code, http.StatusUnauthorized)
 }
@@ -100,7 +100,7 @@ func testVerifyInvalidToken(t *testing.T, realm string) {
 	c.Request, _ = http.NewRequest("GET", "/", nil)
 	c.Request.Header.Add("Authorization", "invalid_token")
 
-	Verify(realm)(c)
+	MustVerify(realm)(c)
 
 	assert.Equal(t, res.Code, http.StatusUnauthorized)
 }
@@ -125,7 +125,7 @@ func testVerifyValidToken(t *testing.T, realm string) {
 	c.Request, _ = http.NewRequest("GET", "/", nil)
 	c.Request.Header.Add("Authorization", "bearer "+token)
 
-	Verify(realm)(c)
+	MustVerify(realm)(c)
 
 	assert.Equal(t, res.Code, http.StatusOK)
 	assert.Equal(t, GetClaims(c), Claims{})
@@ -151,7 +151,7 @@ func testVerifyWrongRealm(t *testing.T, realm1 string, realm2 string) {
 	c.Request, _ = http.NewRequest("GET", "/", nil)
 	c.Request.Header.Add("Authorization", "bearer "+token)
 
-	Verify(realm2)(c)
+	MustVerify(realm2)(c)
 
 	assert.Equal(t, res.Code, http.StatusUnauthorized)
 }
@@ -178,7 +178,7 @@ func TestRefreshToken(t *testing.T) {
 	c.Request, _ = http.NewRequest("GET", "/", nil)
 	c.Request.Header.Add("Authorization", "bearer "+token)
 
-	Verify(refreshRealm)(c)
+	MustVerify(refreshRealm)(c)
 
 	assert.Equal(t, res.Code, http.StatusUnauthorized)
 
@@ -193,7 +193,7 @@ func TestRefreshToken(t *testing.T) {
 	c.Request, _ = http.NewRequest("GET", "/", nil)
 	c.Request.Header.Add("Authorization", "bearer "+token)
 
-	Verify(refreshRealm)(c)
+	MustVerify(refreshRealm)(c)
 
 	assert.Equal(t, res.Code, http.StatusOK)
 	assert.Equal(t, GetClaims(c)["admin"].(bool), true)
