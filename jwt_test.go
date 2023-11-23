@@ -43,22 +43,18 @@ func TestMain(m *testing.M) {
 
 	if err := jwt.SetUp(jwt.Option{Realm: rsRealm, SigningAlgorithm: jwt.RS256, PrivKeyBytes: privateKeyBytes}); err != nil {
 		panic(fmt.Errorf("failed to set up: %w", err))
-		return
 	}
 
 	if err := jwt.SetUp(jwt.Option{Realm: rsRealm2, SigningAlgorithm: jwt.RS256, PrivKeyBytes: privateKeyBytes}); err != nil {
 		panic(fmt.Errorf("failed to set up: %w", err))
-		return
 	}
 
 	if err := jwt.SetUp(jwt.Option{Realm: hsRealm, SigningAlgorithm: jwt.HS256, SecretKey: []byte("secret")}); err != nil {
 		panic(fmt.Errorf("failed to set up: %w", err))
-		return
 	}
 
 	if err := jwt.SetUp(jwt.Option{Realm: hsRealm2, SigningAlgorithm: jwt.HS256, SecretKey: []byte("secret")}); err != nil {
 		panic(fmt.Errorf("failed to set up: %w", err))
-		return
 	}
 
 	if err := jwt.SetUp(
@@ -70,7 +66,6 @@ func TestMain(m *testing.M) {
 		},
 	); err != nil {
 		panic(fmt.Errorf("failed to set up: %w", err))
-		return
 	}
 
 	os.Exit(m.Run())

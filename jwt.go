@@ -179,7 +179,6 @@ func TryVerify(realm string) func(c *gin.Context) {
 
 		c.Set("claims", token.PrivateClaims())
 		c.Next()
-		return
 	}
 }
 
@@ -209,7 +208,6 @@ func MustVerify(realm string) func(c *gin.Context) {
 
 		c.Set("claims", token.PrivateClaims())
 		c.Next()
-		return
 	}
 }
 

@@ -6,7 +6,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"time"
 )
 
@@ -49,7 +49,7 @@ func setRsaPrivateKey(option *Option) error {
 	if len(option.PrivKeyBytes) > 0 {
 		privKeyBytes = option.PrivKeyBytes
 	} else if option.PrivKeyFile != "" {
-		privKeyBytes, err = ioutil.ReadFile(option.PrivKeyFile)
+		privKeyBytes, err = os.ReadFile(option.PrivKeyFile)
 		if err != nil {
 			return fmt.Errorf("failed to read file: %s", option.PrivKeyFile)
 		}
