@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	authorizationHeader = "Authorization"
+	authorizationHeaderName = "Authorization"
 
 	refreshTokenKeyIDSuffix = "-refresh"
 )
@@ -159,12 +159,12 @@ func TryVerify(realm string) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		var err error
 
-		if len(c.GetHeader(authorizationHeader)) <= 7 {
+		if len(c.GetHeader(authorizationHeaderName)) <= 7 {
 			c.Next()
 			return
 		}
 
-		tokenBytes := []byte(c.GetHeader(authorizationHeader)[7:])
+		tokenBytes := []byte(c.GetHeader(authorizationHeaderName)[7:])
 
 		token, err := verify(realm, tokenBytes, false)
 		if err != nil {
@@ -187,12 +187,14 @@ func MustVerify(realm string) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		var err error
 
-		if len(c.GetHeader(authorizationHeader)) <= 7 {
+		authorizationHeader := c.GetHeader(authorizationHeaderName)
+
+		if len(authorizationHeader) <= 7 {
 			c.AbortWithStatus(http.StatusUnauthorized)
 			return
 		}
 
-		tokenBytes := []byte(c.GetHeader(authorizationHeader)[7:])
+		tokenBytes := []byte(authorizationHeader[7:])
 
 		token, err := verify(realm, tokenBytes, false)
 		if err != nil {
