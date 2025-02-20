@@ -155,6 +155,10 @@ func verify(realm string, tokenBytes []byte, refresh bool) (token jwt.Token, err
 	return
 }
 
+func Verify(realm string, tokenBytes []byte) (token jwt.Token, err error) {
+	return verify(realm, tokenBytes, false)
+}
+
 func TryVerify(realm string) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		var err error
@@ -166,7 +170,7 @@ func TryVerify(realm string) func(c *gin.Context) {
 
 		tokenBytes := []byte(c.GetHeader(authorizationHeaderName)[7:])
 
-		token, err := verify(realm, tokenBytes, false)
+		token, err := Verify(realm, tokenBytes)
 		if err != nil {
 			c.Next()
 			return
@@ -195,7 +199,7 @@ func MustVerify(realm string) func(c *gin.Context) {
 
 		tokenBytes := []byte(authorizationHeader[7:])
 
-		token, err := verify(realm, tokenBytes, false)
+		token, err := Verify(realm, tokenBytes)
 		if err != nil {
 			c.AbortWithStatus(http.StatusInternalServerError)
 			return

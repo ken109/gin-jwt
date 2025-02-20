@@ -15,6 +15,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/assert/v2"
+
 	jwt "github.com/ken109/gin-jwt"
 )
 
